@@ -1,15 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" /><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
-    <title>Massachusetts Environment</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Belmont Trash Tracker Map</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+RlTIdCJ4hXnGqjAbwSeR1HpJKsLgA6cFi7qkRsk0="
+    crossorigin=""
+  />
+  <style>
+    body, html {
+      margin: 0; padding: 0; height: 100%;
+      font-family: Arial, sans-serif;
+    }
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+    .leaflet-container {
+      background: #ddd;
+    }
+  </style>
 </head>
 <body>
-    <h1>Hello World!</h1>
-    <h2>We will be discussing climate change and analyzing some data!</h2>
-    <p>boom boom boom</p>
+  <div id="map"></div>
+
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-oA+skTf0xCycib6E6wEX6LhkGAk8C2XWPMniN+8fT94="
+    crossorigin=""
+  ></script>
+  <script>
+    // Coordinates roughly center of Belmont, MA
+    const belmontCoords = [42.3954, -71.1775];
+    const map = L.map('map').setView(belmontCoords, 14);
+
+
+    // OpenStreetMap tile layer with attribution
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+
+    // Add a marker at Belmont center with a popup
+    const marker = L.marker(belmontCoords).addTo(map);
+    marker.bindPopup("<b>Belmont, MA</b><br>Center of the map.").openPopup();
+  </script>
 </body>
 </html>
+
