@@ -110,6 +110,101 @@
         marker.openPopup();
       });
     });
+    // Function to save markers to localStorage
+function saveMarkers() {
+  const markersData = [];
+  map.eachLayer(function(layer) {
+    if (layer instanceof L.Marker) {
+      markersData.push({
+        lat: layer.getLatLng().lat,
+        lng: layer.getLatLng().lng,
+        locationDescription: layer.locationDescription || '',
+        imageUrl: layer.imageUrl || '',
+      });
+    }
+  });
+  localStorage.setItem('belmontMarkers', JSON.stringify(markersData));
+}
+// Function to load markers from localStorage
+function loadMarkers() {
+  const saved = localStorage.getItem('belmontMarkers');
+  if (!saved) return;
+
+  const markersData = JSON.parse(saved);
+  markersData.forEach(data => {
+    const marker = L.marker([data.lat, data.lng], { icon: redIcon }).addTo(map);
+    marker.locationDescription = data.locationDescription;
+    marker.imageUrl = data.imageUrl;
+    
+    // Build popup content like in your existing code
+    const popupContent = document.createElement('div');
+    popupContent.className = 'popup-content';
+
+    const descriptionInput = document.createElement('input');
+    descriptionInput.type = 'text';
+    descriptionInput.placeholder = 'Enter location description';
+    descriptionInput.value = marker.locationDescription;
+    popupContent.appendChild(descriptionInput);
+
+    const imageInput = document.createElement('input');
+    imageInput.type = 'text';
+    imageInput.placeholder = 'Enter image URL (optional)';
+    imageInput.value = marker.imageUrl;
+    popupContent.appendChild(imageInput);
+
+    const addInfoButton = document.createElement('button');
+    addInfoButton.textContent = 'Add Info';
+    addInfoButton.onclick = function() {
+      marker.locationDescription = descriptionInput.value;
+      marker.imageUrl = imageInput.value;
+      updateMarkerPopup(marker);
+      saveMarkers();  // Save whenever info changes
+    };
+    popupContent.appendChild(addInfoButton);
+
+    const pickedUpButton = document.createElement('button');
+    pickedUpButton.textContent = 'Picked Up';
+    pickedUpButton.onclick = function() {
+      map.removeLayer(marker);
+      saveMarkers();  // Save after removing marker
+    };
+    popupContent.appendChild(pickedUpButton);
+
+    marker.bindPopup(popupContent);
+    
+    function updateMarkerPopup(marker) {
+      let contentHtml = `<b>Location:</b> ${marker.locationDescription || 'No description'}<br>`;
+      if (marker.imageUrl) {
+        contentHtml += `<img src="${marker.imageUrl}" alt="Trash Image"><br>`;
+      }
+      contentHtml += '<button id="pickedUpButton">Picked Up</button>';
+      marker.getPopup().setContent(contentHtml);
+
+      L.DomEvent.on(marker.getPopup().getElement().querySelector('#pickedUpButton'), 'click', function() {
+        map.removeLayer(marker);
+        saveMarkers();
+      });
+    }
+  });
+}
+
+// Load saved markers on page load
+loadMarkers();
+
+// Then, inside your existing map click handler, after adding a marker, save it:
+
+map.on('click', function(e) {
+  const marker = L.marker(e.latlng, { icon: redIcon }).addTo(map);
+  marker.status = "unpicked"; 
+  marker.imageUrl = ""; 
+  marker.locationDescription = ""; 
+
+  // ... your existing popup setup ...
+
+  // After setting everything, save markers:
+  saveMarkers();
+});
+
   </script>
 </body>
 </html>
