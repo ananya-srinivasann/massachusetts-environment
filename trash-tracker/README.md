@@ -1,1 +1,0 @@
-# trashie-tracker
