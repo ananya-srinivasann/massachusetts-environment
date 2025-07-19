@@ -28,8 +28,8 @@
   <script>
     const belmontCoords = [42.3954, -71.1775];
     const belmontBounds = L.latLngBounds(
-      [42.3733, -71.2145],
-      [42.4174, -71.1528]
+      [42.37613845253525, -71.21263117352905],
+      [42.4165694015235, -71.15561965045922]
     );
 
     const map = L.map('map').fitBounds(belmontBounds);
@@ -37,6 +37,7 @@
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      minZoom: 13,
       attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
     }).addTo(map);
 
