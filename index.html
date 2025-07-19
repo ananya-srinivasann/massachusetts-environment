@@ -4,72 +4,112 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Belmont Trash Tracker Map</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
-<style>
-    body, html {
-      margin: 0; padding: 0; height: 100%;
-      font-family: Arial, sans-serif;
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { height: 100vh; width: 100%; }
+    .leaflet-container { background: #ddd; }
+    .popup-content {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
     }
-    #map {
-      height: 100vh;
-      width: 100%;
-    }
-    .leaflet-container {
-      background: #ddd;
+    .popup-content img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin-top: 5px;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-  // Coordinates roughly center of Belmont, MA
-const belmontCoords = [42.3954, -71.1775];
+    const belmontCoords = [42.3954, -71.1775];
+    const belmontBounds = L.latLngBounds(
+      [42.3733, -71.2145],
+      [42.4174, -71.1528]
+    );
 
-// 1. Define Belmont's approximate bounding box
-// You'll need to adjust these values slightly to perfectly fit Belmont
-// These are rough estimates for illustration:
-const belmontBounds = L.latLngBounds(
-    [42.37331478464432, -71.21454048430938], // Southwest corner (minLat, minLon)
-    [42.417390098082066, -71.15280208431163]  // Northeast corner (maxLat, maxLon)
-);
+    const map = L.map('map').fitBounds(belmontBounds);
+    map.setMaxBounds(belmontBounds);
 
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+    }).addTo(map);
 
-const map = L.map('map'); // Remove setView initially, we'll use fitBounds
+    // Icon for unpicked trash
+    const redIcon = new L.Icon({
+      iconUrl: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png', // More reliable Google Maps red dot
+      iconSize: [32, 32],
+      iconAnchor: [16, 32]
+    });
 
-// 3. Fit the map to these bounds on load, or set initial view
-// Option A: Fit to bounds
-map.fitBounds(belmontBounds);
+    // Add marker on click
+    map.on('click', function (e) {
+      const marker = L.marker(e.latlng, { icon: redIcon }).addTo(map);
+      marker.status = "unpicked"; // Default status
+      marker.imageUrl = ""; // To store the image URL
+      marker.locationDescription = ""; // To store the location description
 
-// Option B: Set initial view to center with a specific zoom, then apply maxBounds
-// If you use setView, ensure the zoom level is appropriate for your maxBounds
-// map.setView(belmontCoords, 14);
+      const popupContent = document.createElement('div');
+      popupContent.className = 'popup-content';
 
+      const descriptionInput = document.createElement('input');
+      descriptionInput.type = 'text';
+      descriptionInput.placeholder = 'Enter location description';
+      popupContent.appendChild(descriptionInput);
 
-// 2. Set maximum bounds for the map
-map.setMaxBounds(belmontBounds);
+      const imageInput = document.createElement('input');
+      imageInput.type = 'text';
+      imageInput.placeholder = 'Enter image URL (optional)';
+      popupContent.appendChild(imageInput);
 
+      const addInfoButton = document.createElement('button');
+      addInfoButton.textContent = 'Add Info';
+      addInfoButton.onclick = function() {
+        marker.locationDescription = descriptionInput.value;
+        marker.imageUrl = imageInput.value;
+        updateMarkerPopup(marker);
+      };
+      popupContent.appendChild(addInfoButton);
 
-// OpenStreetMap tile layer with attribution
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  bounds: belmontBounds // Optional: You can also limit tile loading to these bounds
-}).addTo(map);
+      const pickedUpButton = document.createElement('button');
+      pickedUpButton.textContent = 'Picked Up';
+      pickedUpButton.onclick = function() {
+        map.removeLayer(marker); // Remove the marker
+      };
+      popupContent.appendChild(pickedUpButton);
 
+      marker.bindPopup(popupContent);
+      marker.openPopup(); // Open popup immediately after creation for input
 
-// Add a marker at Belmont center with a popup
-const marker = L.marker(belmontCoords).addTo(map);
-marker.bindPopup("<b>Belmont, MA</b><br>Center of the map.").openPopup();
+      // Function to update the marker's popup content
+      function updateMarkerPopup(marker) {
+        let contentHtml = `<b>Location:</b> ${marker.locationDescription || 'No description'}<br>`;
+        if (marker.imageUrl) {
+          contentHtml += `<img src="${marker.imageUrl}" alt="Trash Image"><br>`;
+        }
+        contentHtml += '<button id="pickedUpButton">Picked Up</button>';
+        marker.getPopup().setContent(contentHtml);
 
-// Optional: Adjust zoom level when user tries to zoom out too far
-// This keeps the map within the bounds even if they try to zoom out
-map.setMinZoom(map.getZoom()); // Set the current zoom as the minimum zoom
+        // Re-attach event listener for the "Picked Up" button after content update
+        L.DomEvent.on(marker.getPopup().getElement().querySelector('#pickedUpButton'), 'click', function() {
+          map.removeLayer(marker);
+        });
+      }
+
+      // Call updateMarkerPopup initially to show input fields
+      updateMarkerPopup(marker);
+
+      // Re-open popup on marker click to allow editing or confirming "picked up"
+      marker.on('click', function () {
+        marker.bindPopup(popupContent); // Bind the same popup content
+        marker.openPopup();
+      });
+    });
   </script>
 </body>
 </html>
-
