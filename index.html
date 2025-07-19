@@ -116,6 +116,105 @@
         marker.openPopup();
       });
     });
+    // Save all markers on the map to localStorage
+function saveMarkers() {
+  const markersData = [];
+  map.eachLayer(layer => {
+    if (layer instanceof L.Marker) {
+      markersData.push({
+        lat: layer.getLatLng().lat,
+        lng: layer.getLatLng().lng,
+        locationDescription: layer.locationDescription || '',
+        imageUrl: layer.imageUrl || ''
+      });
+    }
+  });
+  localStorage.setItem('belmontMarkers', JSON.stringify(markersData));
+}
+// Load saved markers from localStorage and add to map
+function loadMarkers() {
+  const saved = localStorage.getItem('belmontMarkers');
+  if (!saved) return;
+
+  const markersData = JSON.parse(saved);
+  markersData.forEach(data => {
+    createMarker(data.lat, data.lng, data.locationDescription, data.imageUrl);
+  });
+}
+
+// Create a marker with popup including description, image, and buttons
+function createMarker(lat, lng, locationDescription = '', imageUrl = '') {
+  const marker = L.marker([lat, lng], { icon: redIcon }).addTo(map);
+  marker.locationDescription = locationDescription;
+  marker.imageUrl = imageUrl;
+
+  const popupContent = document.createElement('div');
+  popupContent.className = 'popup-content';
+
+  const descriptionInput = document.createElement('input');
+  descriptionInput.type = 'text';
+  descriptionInput.placeholder = 'Enter location description';
+  descriptionInput.value = locationDescription;
+  popupContent.appendChild(descriptionInput);
+
+  const imageInput = document.createElement('input');
+  imageInput.type = 'text';
+  imageInput.placeholder = 'Enter image URL (optional)';
+  imageInput.value = imageUrl;
+  popupContent.appendChild(imageInput);
+
+  const addInfoButton = document.createElement('button');
+  addInfoButton.textContent = 'Add Info';
+  addInfoButton.onclick = () => {
+    marker.locationDescription = descriptionInput.value;
+    marker.imageUrl = imageInput.value;
+    updateDisplayedInfo();
+    saveMarkers();
+  };
+  popupContent.appendChild(addInfoButton);
+
+  const pickedUpButton = document.createElement('button');
+  pickedUpButton.textContent = 'Picked Up';
+  pickedUpButton.onclick = () => {
+    map.removeLayer(marker);
+    saveMarkers();
+  };
+  popupContent.appendChild(pickedUpButton);
+
+  const infoDiv = document.createElement('div');
+  popupContent.appendChild(infoDiv);
+
+  function updateDisplayedInfo() {
+    infoDiv.innerHTML = `<b>Location:</b> ${marker.locationDescription || 'No description'}`;
+    if (marker.imageUrl) {
+      infoDiv.innerHTML += `<br><img src="${marker.imageUrl}" alt="Trash Image" style="max-width:100%; height:auto;">`;
+    }
+  }
+
+  updateDisplayedInfo();
+
+  marker.bindPopup(popupContent);
+
+  marker.on('click', () => {
+    marker.openPopup();
+  });
+
+  return marker;
+}
+
+// When the map is clicked, add a marker and save
+map.on('click', function(e) {
+  if (!belmontBounds.contains(e.latlng)) {
+    alert("Please click within the Belmont area to add a trash marker.");
+    return;
+  }
+  createMarker(e.latlng.lat, e.latlng.lng);
+  saveMarkers();
+});
+
+// When the page loads, load saved markers
+loadMarkers();
+
   </script>
 </body>
 </html>
