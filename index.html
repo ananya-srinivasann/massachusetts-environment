@@ -65,6 +65,9 @@
       iconAnchor: [16, 32]
     });
 
+    // Store references to markers so we can remove them later
+    const markerRefs = {};
+
     // --- Firestore Functions ---
     async function saveMarker(lat, lng, description = "", imageUrl = "") {
       await addDoc(markersCol, {
@@ -73,6 +76,8 @@
     }
 
     function createMarker(id, data) {
+      if (data.status === "picked") return; // don't show picked markers
+
       const marker = L.marker([data.lat, data.lng], { icon: redIcon }).addTo(map);
 
       const popupContent = document.createElement("div");
@@ -83,31 +88,44 @@
         popupContent.innerHTML += `<img src="${data.imageUrl}" alt="Trash Image"><br>`;
       }
 
-      if (data.status === "unpicked") {
-        const button = document.createElement("button");
-        button.textContent = "Picked Up";
-        button.onclick = async () => {
-          await updateDoc(doc(db, "markers", id), { status: "picked" });
-          map.removeLayer(marker);
-        };
-        popupContent.appendChild(button);
-      } else {
-        popupContent.innerHTML += "<i>Picked up</i>";
-      }
+      const button = document.createElement("button");
+      button.textContent = "Picked Up";
+      button.onclick = async () => {
+        await updateDoc(doc(db, "markers", id), { status: "picked" });
+      };
+      popupContent.appendChild(button);
 
       marker.bindPopup(popupContent);
+      markerRefs[id] = marker;
       return marker;
     }
 
     // --- Real-time updates ---
     onSnapshot(markersCol, snapshot => {
       snapshot.docChanges().forEach(change => {
+        const id = change.doc.id;
+        const data = change.doc.data();
+
         if (change.type === "added") {
-          createMarker(change.doc.id, change.doc.data());
+          if (!markerRefs[id]) {
+            createMarker(id, data);
+          }
         }
+
         if (change.type === "modified") {
-          // For now, reload page on updates to simplify
-          location.reload();
+          if (data.status === "picked") {
+            if (markerRefs[id]) {
+              map.removeLayer(markerRefs[id]);
+              delete markerRefs[id];
+            }
+          }
+        }
+
+        if (change.type === "removed") {
+          if (markerRefs[id]) {
+            map.removeLayer(markerRefs[id]);
+            delete markerRefs[id];
+          }
         }
       });
     });
