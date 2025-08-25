@@ -26,10 +26,7 @@
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Image compression library -->
   <script type="module">
-    import imageCompression from "https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.esm.js";
-
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
     import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } 
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -185,12 +182,8 @@
         const file = fileInput.files[0];
         if (file) {
           try {
-            // --- Compress image before upload ---
-            const options = { maxSizeMB: 0.9, maxWidthOrHeight: 1024 };
-            const compressedFile = await imageCompression(file, options);
-
             const storageRef = ref(storage, `trash-images/${Date.now()}-${file.name}`);
-            await uploadBytes(storageRef, compressedFile);
+            await uploadBytes(storageRef, file);
             imageUrl = await getDownloadURL(storageRef);
           } catch (err) {
             alert("Upload failed: " + err.message);
