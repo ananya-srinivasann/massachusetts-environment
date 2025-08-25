@@ -217,20 +217,16 @@ loadMarkers();
 
   </script>
   
-  <script type="module">
-  // Import the functions you need from the SDKs you need
+<script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
+  import { getFirestore, collection, addDoc, getDocs, onSnapshot, deleteDoc, doc, updateDoc } 
+    from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
   const firebaseConfig = {
     apiKey: "AIzaSyBr7nw5opBjB0lLdSiOySH9dqpoYFgxjpY",
     authDomain: "belmont-trash-pick-up.firebaseapp.com",
     projectId: "belmont-trash-pick-up",
-    storageBucket: "belmont-trash-pick-up.firebasestorage.app",
+    storageBucket: "belmont-trash-pick-up.appspot.com",
     messagingSenderId: "453932393544",
     appId: "1:453932393544:web:70224c013a5b36f59da47d",
     measurementId: "G-5XP938BFLQ"
@@ -238,7 +234,68 @@ loadMarkers();
 
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
+  const db = getFirestore(app);
+
+  const markersCol = collection(db, "markers");
+
+  // Add marker to Firestore
+  async function saveMarker(lat, lng, description = "", imageUrl = "") {
+    await addDoc(markersCol, {
+      lat, lng, description, imageUrl, status: "unpicked"
+    });
+  }
+
+  // Create marker on map from DB
+  function createMarker(id, data) {
+    const marker = L.marker([data.lat, data.lng], { icon: redIcon }).addTo(map);
+
+    const popupContent = document.createElement("div");
+    popupContent.className = "popup-content";
+
+    popupContent.innerHTML = `<b>Location:</b> ${data.description || "No description"}<br>`;
+    if (data.imageUrl) {
+      popupContent.innerHTML += `<img src="${data.imageUrl}" alt="Trash Image"><br>`;
+    }
+
+    if (data.status === "unpicked") {
+      const button = document.createElement("button");
+      button.textContent = "Picked Up";
+      button.onclick = async () => {
+        await updateDoc(doc(db, "markers", id), { status: "picked" });
+        map.removeLayer(marker);
+      };
+      popupContent.appendChild(button);
+    } else {
+      popupContent.innerHTML += "<i>Picked up</i>";
+    }
+
+    marker.bindPopup(popupContent);
+    return marker;
+  }
+
+  // Listen for real-time updates from Firestore
+  onSnapshot(markersCol, snapshot => {
+    snapshot.docChanges().forEach(change => {
+      if (change.type === "added") {
+        createMarker(change.doc.id, change.doc.data());
+      }
+      if (change.type === "removed") {
+        // handle removal if needed
+      }
+    });
+  });
+
+  // When user clicks map, save to Firestore
+  map.on("click", async e => {
+    if (!belmontBounds.contains(e.latlng)) {
+      alert("Please click within Belmont.");
+      return;
+    }
+    const description = prompt("Enter location description:");
+    const imageUrl = prompt("Enter image URL (optional):");
+    await saveMarker(e.latlng.lat, e.latlng.lng, description, imageUrl);
+  });
 </script>
+
 </body>
 </html>
