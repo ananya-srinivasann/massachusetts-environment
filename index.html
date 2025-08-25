@@ -30,9 +30,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
     import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } 
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-    import { getStorage, ref, uploadBytes, getDownloadURL } 
-      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
-    
+
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
     // --- Firebase setup ---
     const firebaseConfig = {
@@ -46,8 +45,12 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    const storage = getStorage(app);
     const markersCol = collection(db, "markers");
+
+    // --- Supabase setup (replace with your anon key) ---
+    const supabaseUrl = "https://swqzdqeahoezuviyydej.supabase.co";
+    const supabaseKey = "process.env.SUPABASE_KEY"; // paste anon public key here
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // --- Map setup ---
     const belmontBounds = L.latLngBounds(
@@ -181,12 +184,32 @@
 
         let imageUrl = "";
         const file = fileInput.files[0];
+
         if (file) {
           try {
-            const storageRef = ref(storage, `trash-images/${Date.now()}-${file.name}`);
-            await uploadBytes(storageRef, file);
-            imageUrl = await getDownloadURL(storageRef);
+            const filePath = `trash-images/${Date.now()}-${file.name}`;
+
+            // Upload to Supabase Storage
+            const { error: uploadError } = await supabase.storage
+              .from("trash-images") // bucket name in Supabase
+              .upload(filePath, file);
+
+            if (uploadError) {
+              console.error("Upload error:", uploadError);
+              alert("Upload failed: " + uploadError.message);
+              submitBtn.disabled = false;
+              return;
+            }
+
+            // Get public URL
+            const { data: urlData } = supabase.storage
+              .from("trash-images")
+              .getPublicUrl(filePath);
+
+            imageUrl = urlData.publicUrl;
+            console.log("Uploaded file URL:", imageUrl);
           } catch (err) {
+            console.error("Unexpected upload error:", err);
             alert("Upload failed: " + err.message);
             submitBtn.disabled = false;
             return;
