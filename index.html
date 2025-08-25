@@ -32,6 +32,12 @@
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } 
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
+    
+    import { createClient } from '@supabase/supabase-js'
+    const supabaseUrl = 'https://swqzdqeahoezuviyydej.supabase.co'
+    const supabaseKey = process.env.SUPABASE_KEY
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
 
     // --- Firebase setup ---
     const firebaseConfig = {
@@ -182,9 +188,27 @@
         const file = fileInput.files[0];
         if (file) {
           try {
-            const storageRef = ref(storage, `trash-images/${Date.now()}-${file.name}`);
-            await uploadBytes(storageRef, file);
-            imageUrl = await getDownloadURL(storageRef);
+            const filePath = `trash-images/${Date.now()}-${file.name}`;
+const { error } = await supabase.storage
+  .from("trash-images") // bucket name
+  .upload(filePath, file, {
+    cacheControl: "3600",
+    upsert: false
+  });
+
+if (error) {
+  alert("Upload failed: " + error.message);
+  submitBtn.disabled = false;
+  return;
+}
+
+// Public URL
+const { data } = supabase.storage
+  .from("trash-images")
+  .getPublicUrl(filePath);
+
+imageUrl = data.publicUrl;
+
           } catch (err) {
             alert("Upload failed: " + err.message);
             submitBtn.disabled = false;
