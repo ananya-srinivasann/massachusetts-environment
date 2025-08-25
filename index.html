@@ -25,6 +25,7 @@
 <body>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
     import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } 
@@ -70,21 +71,21 @@
 
     const markerRefs = {};
 
-    // --- Firestore Functions ---
+    // --- Firestore Save ---
     async function saveMarker(lat, lng, description = "", imageUrl = "") {
       await addDoc(markersCol, {
         lat, lng, description, imageUrl, status: "unpicked"
       });
     }
 
+    // --- Create Marker from Firestore ---
     function createMarker(id, data) {
-      if (data.status === "picked") return; // don't show picked markers
+      if (data.status === "picked") return;
 
       const marker = L.marker([data.lat, data.lng], { icon: redIcon }).addTo(map);
 
       const popupContent = document.createElement("div");
       popupContent.className = "popup-content";
-
       popupContent.innerHTML = `<b>Location:</b> ${data.description || "No description"}<br>`;
       if (data.imageUrl) {
         popupContent.innerHTML += `<img src="${data.imageUrl}" alt="Trash Image"><br>`;
@@ -99,27 +100,22 @@
 
       marker.bindPopup(popupContent);
       markerRefs[id] = marker;
-      return marker;
     }
 
-    // --- Real-time updates ---
+    // --- Real-time Updates ---
     onSnapshot(markersCol, snapshot => {
       snapshot.docChanges().forEach(change => {
         const id = change.doc.id;
         const data = change.doc.data();
 
-        if (change.type === "added") {
-          if (!markerRefs[id]) {
-            createMarker(id, data);
-          }
+        if (change.type === "added" && !markerRefs[id]) {
+          createMarker(id, data);
         }
 
-        if (change.type === "modified") {
-          if (data.status === "picked") {
-            if (markerRefs[id]) {
-              map.removeLayer(markerRefs[id]);
-              delete markerRefs[id];
-            }
+        if (change.type === "modified" && data.status === "picked") {
+          if (markerRefs[id]) {
+            map.removeLayer(markerRefs[id]);
+            delete markerRefs[id];
           }
         }
 
@@ -132,26 +128,44 @@
       });
     });
 
-    // --- Add marker when clicking ---
+    // --- Add Marker with Upload Form ---
     map.on("click", e => {
       if (!belmontBounds.contains(e.latlng)) {
         alert("Please click within Belmont.");
         return;
       }
 
-      // Form popup
       const popupDiv = document.createElement("div");
       popupDiv.className = "popup-content";
 
       const descInput = document.createElement("input");
       descInput.type = "text";
-      descInput.placeholder = "Enter location description";
+      descInput.placeholder = "Enter description";
       popupDiv.appendChild(descInput);
 
       const fileInput = document.createElement("input");
       fileInput.type = "file";
       fileInput.accept = "image/*";
       popupDiv.appendChild(fileInput);
+
+      const previewImg = document.createElement("img");
+      previewImg.style.display = "none";
+      previewImg.style.maxWidth = "100%";
+      popupDiv.appendChild(previewImg);
+
+      fileInput.onchange = () => {
+        if (fileInput.files[0]) {
+          const reader = new FileReader();
+          reader.onload = e => {
+            previewImg.src = e.target.result;
+            previewImg.style.display = "block";
+          };
+          reader.readAsDataURL(fileInput.files[0]);
+        }
+      };
+
+      const statusDiv = document.createElement("div");
+      popupDiv.appendChild(statusDiv);
 
       const submitBtn = document.createElement("button");
       submitBtn.textContent = "Save Marker";
@@ -161,15 +175,25 @@
       tempMarker.bindPopup(popupDiv).openPopup();
 
       submitBtn.onclick = async () => {
+        submitBtn.disabled = true;
+        statusDiv.textContent = "Uploading...";
+
         let imageUrl = "";
         const file = fileInput.files[0];
         if (file) {
-          const storageRef = ref(storage, `trash-images/${Date.now()}-${file.name}`);
-          await uploadBytes(storageRef, file);
-          imageUrl = await getDownloadURL(storageRef);
+          try {
+            const storageRef = ref(storage, `trash-images/${Date.now()}-${file.name}`);
+            await uploadBytes(storageRef, file);
+            imageUrl = await getDownloadURL(storageRef);
+          } catch (err) {
+            alert("Upload failed: " + err.message);
+            submitBtn.disabled = false;
+            return;
+          }
         }
+
         await saveMarker(e.latlng.lat, e.latlng.lng, descInput.value, imageUrl);
-        map.removeLayer(tempMarker); // remove temp marker, Firestore will add real one
+        map.removeLayer(tempMarker);
       };
     });
   </script>
