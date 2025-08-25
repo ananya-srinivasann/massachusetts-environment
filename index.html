@@ -29,6 +29,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
     import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } 
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } 
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
     // --- Firebase setup ---
     const firebaseConfig = {
@@ -42,6 +44,7 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const storage = getStorage(app);
     const markersCol = collection(db, "markers");
 
     // --- Map setup ---
@@ -65,7 +68,6 @@
       iconAnchor: [16, 32]
     });
 
-    // Store references to markers so we can remove them later
     const markerRefs = {};
 
     // --- Firestore Functions ---
@@ -131,14 +133,44 @@
     });
 
     // --- Add marker when clicking ---
-    map.on("click", async e => {
+    map.on("click", e => {
       if (!belmontBounds.contains(e.latlng)) {
         alert("Please click within Belmont.");
         return;
       }
-      const description = prompt("Enter location description:");
-      const imageUrl = prompt("Enter image URL (optional):");
-      await saveMarker(e.latlng.lat, e.latlng.lng, description, imageUrl);
+
+      // Form popup
+      const popupDiv = document.createElement("div");
+      popupDiv.className = "popup-content";
+
+      const descInput = document.createElement("input");
+      descInput.type = "text";
+      descInput.placeholder = "Enter location description";
+      popupDiv.appendChild(descInput);
+
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept = "image/*";
+      popupDiv.appendChild(fileInput);
+
+      const submitBtn = document.createElement("button");
+      submitBtn.textContent = "Save Marker";
+      popupDiv.appendChild(submitBtn);
+
+      const tempMarker = L.marker(e.latlng, { icon: redIcon }).addTo(map);
+      tempMarker.bindPopup(popupDiv).openPopup();
+
+      submitBtn.onclick = async () => {
+        let imageUrl = "";
+        const file = fileInput.files[0];
+        if (file) {
+          const storageRef = ref(storage, `trash-images/${Date.now()}-${file.name}`);
+          await uploadBytes(storageRef, file);
+          imageUrl = await getDownloadURL(storageRef);
+        }
+        await saveMarker(e.latlng.lat, e.latlng.lng, descInput.value, imageUrl);
+        map.removeLayer(tempMarker); // remove temp marker, Firestore will add real one
+      };
     });
   </script>
 </body>
