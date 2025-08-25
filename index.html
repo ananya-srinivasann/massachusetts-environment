@@ -25,15 +25,33 @@
 <body>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    // These coordinates define the southwest and northeast corners of Belmont
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } 
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+    // --- Firebase setup ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBr7nw5opBjB0lLdSiOySH9dqpoYFgxjpY",
+      authDomain: "belmont-trash-pick-up.firebaseapp.com",
+      projectId: "belmont-trash-pick-up",
+      storageBucket: "belmont-trash-pick-up.appspot.com",
+      messagingSenderId: "453932393544",
+      appId: "1:453932393544:web:70224c013a5b36f59da47d",
+      measurementId: "G-5XP938BFLQ"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const markersCol = collection(db, "markers");
+
+    // --- Map setup ---
     const belmontBounds = L.latLngBounds(
-      [42.37613845253525, -71.21263117352905], // Southwest corner
-      [42.4165694015235, -71.15561965045922]  // Northeast corner
+      [42.37613845253525, -71.21263117352905],
+      [42.4165694015235, -71.15561965045922]
     );
 
     const map = L.map('map').fitBounds(belmontBounds);
-    map.setMaxBounds(belmontBounds); // This line limits the pannable area
+    map.setMaxBounds(belmontBounds);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -47,255 +65,63 @@
       iconAnchor: [16, 32]
     });
 
-    // Add marker on click
-    map.on('click', function (e) {
-      // Check if the clicked point is within the allowed bounds before adding a marker
-      if (!belmontBounds.contains(e.latlng)) {
-        alert("Please click within the Belmont area to add a trash marker.");
-        return; // Exit the function if outside bounds
+    // --- Firestore Functions ---
+    async function saveMarker(lat, lng, description = "", imageUrl = "") {
+      await addDoc(markersCol, {
+        lat, lng, description, imageUrl, status: "unpicked"
+      });
+    }
+
+    function createMarker(id, data) {
+      const marker = L.marker([data.lat, data.lng], { icon: redIcon }).addTo(map);
+
+      const popupContent = document.createElement("div");
+      popupContent.className = "popup-content";
+
+      popupContent.innerHTML = `<b>Location:</b> ${data.description || "No description"}<br>`;
+      if (data.imageUrl) {
+        popupContent.innerHTML += `<img src="${data.imageUrl}" alt="Trash Image"><br>`;
       }
 
-      const marker = L.marker(e.latlng, { icon: redIcon }).addTo(map);
-      marker.status = "unpicked"; // Default status
-      marker.imageUrl = ""; // To store the image URL
-      marker.locationDescription = ""; // To store the location description
-
-      const popupContent = document.createElement('div');
-      popupContent.className = 'popup-content';
-
-      const descriptionInput = document.createElement('input');
-      descriptionInput.type = 'text';
-      descriptionInput.placeholder = 'Enter location description';
-      popupContent.appendChild(descriptionInput);
-
-      const imageInput = document.createElement('input');
-      imageInput.type = 'text';
-      imageInput.placeholder = 'Enter image URL (optional)';
-      popupContent.appendChild(imageInput);
-
-      const addInfoButton = document.createElement('button');
-      addInfoButton.textContent = 'Add Info';
-      addInfoButton.onclick = function() {
-        marker.locationDescription = descriptionInput.value;
-        marker.imageUrl = imageInput.value;
-        updateMarkerPopup(marker);
-      };
-      popupContent.appendChild(addInfoButton);
-
-      const pickedUpButton = document.createElement('button');
-      pickedUpButton.textContent = 'Picked Up';
-      pickedUpButton.onclick = function() {
-        map.removeLayer(marker); // Remove the marker
-      };
-      popupContent.appendChild(pickedUpButton);
+      if (data.status === "unpicked") {
+        const button = document.createElement("button");
+        button.textContent = "Picked Up";
+        button.onclick = async () => {
+          await updateDoc(doc(db, "markers", id), { status: "picked" });
+          map.removeLayer(marker);
+        };
+        popupContent.appendChild(button);
+      } else {
+        popupContent.innerHTML += "<i>Picked up</i>";
+      }
 
       marker.bindPopup(popupContent);
-      marker.openPopup(); // Open popup immediately after creation for input
+      return marker;
+    }
 
-      // Function to update the marker's popup content
-      function updateMarkerPopup(marker) {
-        let contentHtml = `<b>Location:</b> ${marker.locationDescription || 'No description'}<br>`;
-        if (marker.imageUrl) {
-          contentHtml += `<img src="${marker.imageUrl}" alt="Trash Image"><br>`;
+    // --- Real-time updates ---
+    onSnapshot(markersCol, snapshot => {
+      snapshot.docChanges().forEach(change => {
+        if (change.type === "added") {
+          createMarker(change.doc.id, change.doc.data());
         }
-        contentHtml += '<button id="pickedUpButton">Picked Up</button>';
-        marker.getPopup().setContent(contentHtml);
-
-        // Re-attach event listener for the "Picked Up" button after content update
-        L.DomEvent.on(marker.getPopup().getElement().querySelector('#pickedUpButton'), 'click', function() {
-          map.removeLayer(marker);
-        });
-      }
-
-      // Call updateMarkerPopup initially to show input fields
-      updateMarkerPopup(marker);
-
-      // Re-open popup on marker click to allow editing or confirming "picked up"
-      marker.on('click', function () {
-        marker.bindPopup(popupContent); // Bind the same popup content
-        marker.openPopup();
+        if (change.type === "modified") {
+          // For now, reload page on updates to simplify
+          location.reload();
+        }
       });
     });
-    // Save all markers on the map to localStorage
-function saveMarkers() {
-  const markersData = [];
-  map.eachLayer(layer => {
-    if (layer instanceof L.Marker) {
-      markersData.push({
-        lat: layer.getLatLng().lat,
-        lng: layer.getLatLng().lng,
-        locationDescription: layer.locationDescription || '',
-        imageUrl: layer.imageUrl || ''
-      });
-    }
-  });
-  localStorage.setItem('belmontMarkers', JSON.stringify(markersData));
-}
-// Load saved markers from localStorage and add to map
-function loadMarkers() {
-  const saved = localStorage.getItem('belmontMarkers');
-  if (!saved) return;
 
-  const markersData = JSON.parse(saved);
-  markersData.forEach(data => {
-    createMarker(data.lat, data.lng, data.locationDescription, data.imageUrl);
-  });
-}
-
-// Create a marker with popup including description, image, and buttons
-function createMarker(lat, lng, locationDescription = '', imageUrl = '') {
-  const marker = L.marker([lat, lng], { icon: redIcon }).addTo(map);
-  marker.locationDescription = locationDescription;
-  marker.imageUrl = imageUrl;
-
-  const popupContent = document.createElement('div');
-  popupContent.className = 'popup-content';
-
-  const descriptionInput = document.createElement('input');
-  descriptionInput.type = 'text';
-  descriptionInput.placeholder = 'Enter location description';
-  descriptionInput.value = locationDescription;
-  popupContent.appendChild(descriptionInput);
-
-  const imageInput = document.createElement('input');
-  imageInput.type = 'text';
-  imageInput.placeholder = 'Enter image URL (optional)';
-  imageInput.value = imageUrl;
-  popupContent.appendChild(imageInput);
-
-  const addInfoButton = document.createElement('button');
-  addInfoButton.textContent = 'Add Info';
-  addInfoButton.onclick = () => {
-    marker.locationDescription = descriptionInput.value;
-    marker.imageUrl = imageInput.value;
-    updateDisplayedInfo();
-    saveMarkers();
-  };
-  popupContent.appendChild(addInfoButton);
-
-  const pickedUpButton = document.createElement('button');
-  pickedUpButton.textContent = 'Picked Up';
-  pickedUpButton.onclick = () => {
-    map.removeLayer(marker);
-    saveMarkers();
-  };
-  popupContent.appendChild(pickedUpButton);
-
-  const infoDiv = document.createElement('div');
-  popupContent.appendChild(infoDiv);
-
-  function updateDisplayedInfo() {
-    infoDiv.innerHTML = `<b>Location:</b> ${marker.locationDescription || 'No description'}`;
-    if (marker.imageUrl) {
-      infoDiv.innerHTML += `<br><img src="${marker.imageUrl}" alt="Trash Image" style="max-width:100%; height:auto;">`;
-    }
-  }
-
-  updateDisplayedInfo();
-
-  marker.bindPopup(popupContent);
-
-  marker.on('click', () => {
-    marker.openPopup();
-  });
-
-  return marker;
-}
-
-// When the map is clicked, add a marker and save
-map.on('click', function(e) {
-  if (!belmontBounds.contains(e.latlng)) {
-    alert("Please click within the Belmont area to add a trash marker.");
-    return;
-  }
-  createMarker(e.latlng.lat, e.latlng.lng);
-  saveMarkers();
-});
-
-// When the page loads, load saved markers
-loadMarkers();
-
+    // --- Add marker when clicking ---
+    map.on("click", async e => {
+      if (!belmontBounds.contains(e.latlng)) {
+        alert("Please click within Belmont.");
+        return;
+      }
+      const description = prompt("Enter location description:");
+      const imageUrl = prompt("Enter image URL (optional):");
+      await saveMarker(e.latlng.lat, e.latlng.lng, description, imageUrl);
+    });
   </script>
-  
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, getDocs, onSnapshot, deleteDoc, doc, updateDoc } 
-    from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBr7nw5opBjB0lLdSiOySH9dqpoYFgxjpY",
-    authDomain: "belmont-trash-pick-up.firebaseapp.com",
-    projectId: "belmont-trash-pick-up",
-    storageBucket: "belmont-trash-pick-up.appspot.com",
-    messagingSenderId: "453932393544",
-    appId: "1:453932393544:web:70224c013a5b36f59da47d",
-    measurementId: "G-5XP938BFLQ"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  const markersCol = collection(db, "markers");
-
-  // Add marker to Firestore
-  async function saveMarker(lat, lng, description = "", imageUrl = "") {
-    await addDoc(markersCol, {
-      lat, lng, description, imageUrl, status: "unpicked"
-    });
-  }
-
-  // Create marker on map from DB
-  function createMarker(id, data) {
-    const marker = L.marker([data.lat, data.lng], { icon: redIcon }).addTo(map);
-
-    const popupContent = document.createElement("div");
-    popupContent.className = "popup-content";
-
-    popupContent.innerHTML = `<b>Location:</b> ${data.description || "No description"}<br>`;
-    if (data.imageUrl) {
-      popupContent.innerHTML += `<img src="${data.imageUrl}" alt="Trash Image"><br>`;
-    }
-
-    if (data.status === "unpicked") {
-      const button = document.createElement("button");
-      button.textContent = "Picked Up";
-      button.onclick = async () => {
-        await updateDoc(doc(db, "markers", id), { status: "picked" });
-        map.removeLayer(marker);
-      };
-      popupContent.appendChild(button);
-    } else {
-      popupContent.innerHTML += "<i>Picked up</i>";
-    }
-
-    marker.bindPopup(popupContent);
-    return marker;
-  }
-
-  // Listen for real-time updates from Firestore
-  onSnapshot(markersCol, snapshot => {
-    snapshot.docChanges().forEach(change => {
-      if (change.type === "added") {
-        createMarker(change.doc.id, change.doc.data());
-      }
-      if (change.type === "removed") {
-        // handle removal if needed
-      }
-    });
-  });
-
-  // When user clicks map, save to Firestore
-  map.on("click", async e => {
-    if (!belmontBounds.contains(e.latlng)) {
-      alert("Please click within Belmont.");
-      return;
-    }
-    const description = prompt("Enter location description:");
-    const imageUrl = prompt("Enter image URL (optional):");
-    await saveMarker(e.latlng.lat, e.latlng.lng, description, imageUrl);
-  });
-</script>
-
 </body>
 </html>
